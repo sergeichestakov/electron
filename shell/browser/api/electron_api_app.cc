@@ -83,6 +83,7 @@
 
 #if BUILDFLAG(IS_MAC)
 #include <CoreFoundation/CoreFoundation.h>
+#include "base/mac/mac_util.h"
 #include "shell/browser/ui/cocoa/electron_bundle_mover.h"
 #endif
 
@@ -393,12 +394,16 @@ struct Converter<Browser::LoginItemSettings> {
       return false;
 
     dict.Get("openAtLogin", &(out->open_at_login));
+    dict.Get("type", &(out->open_at_login));
     dict.Get("openAsHidden", &(out->open_as_hidden));
     dict.Get("path", &(out->path));
     dict.Get("args", &(out->args));
 #if BUILDFLAG(IS_WIN)
-    dict.Get("enabled", &(out->enabled));
     dict.Get("name", &(out->name));
+    dict.Get("enabled", &(out->enabled));
+#elif BUILDFLAG(IS_MAC)
+    dict.Get("name", &(out->name));
+    dict.Get("type", &(out->type));
 #endif
     return true;
   }
@@ -406,16 +411,19 @@ struct Converter<Browser::LoginItemSettings> {
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    Browser::LoginItemSettings val) {
     gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+#if BUILDFLAG(IS_WIN)
+    dict.Set("launchItems", val.launch_items);
+    dict.Set("executableWillLaunchAtLogin",
+             val.executable_will_launch_at_login);
+#elif BUILDFLAG(IS_MAC)
+    if (base::mac::IsAtLeastOS13())
+      dict.Set("status", val.status);
+#endif
     dict.Set("openAtLogin", val.open_at_login);
     dict.Set("openAsHidden", val.open_as_hidden);
     dict.Set("restoreState", val.restore_state);
     dict.Set("wasOpenedAtLogin", val.opened_at_login);
     dict.Set("wasOpenedAsHidden", val.opened_as_hidden);
-#if BUILDFLAG(IS_WIN)
-    dict.Set("launchItems", val.launch_items);
-    dict.Set("executableWillLaunchAtLogin",
-             val.executable_will_launch_at_login);
-#endif
     return dict.GetHandle();
   }
 };
