@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 import { IPC_MESSAGES } from '@electron/internal/common/ipc-messages';
 
 import type * as ipcRendererInternalModule from '@electron/internal/renderer/ipc-renderer-internal';

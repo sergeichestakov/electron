@@ -1,7 +1,7 @@
-import { Buffer } from 'buffer';
-import * as path from 'path';
-import * as util from 'util';
-import type * as Crypto from 'crypto';
+import { Buffer } from 'node:buffer';
+import * as path from 'node:path';
+import * as util from 'node:util';
+import type * as Crypto from 'node:crypto';
 
 const asar = process._linkedBinding('electron_common_asar');
 
@@ -66,7 +66,7 @@ const gid = process.getgid?.() ?? 0;
 const fakeTime = new Date();
 
 const asarStatsToFsStats = function (stats: NodeJS.AsarFileStat) {
-  const { Stats, constants } = require('fs');
+  const { Stats, constants } = require('node:fs');
 
   let mode = constants.S_IROTH ^ constants.S_IRGRP ^ constants.S_IRUSR ^ constants.S_IWUSR;
 
@@ -239,7 +239,7 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
   const logASARAccess = (asarPath: string, filePath: string, offset: number) => {
     if (!process.env.ELECTRON_LOG_ASAR_READS) return;
     if (!logFDs.has(asarPath)) {
-      const path = require('path');
+      const path = require('node:path');
       const logFilename = `${path.basename(asarPath, '.asar')}-access-log.txt`;
       const logPath = path.join(require('os').tmpdir(), logFilename);
       logFDs.set(asarPath, fs.openSync(logPath, 'a'));
@@ -712,8 +712,8 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
     return files;
   };
 
-  const { internalModuleReadJSON } = internalBinding('fs');
-  internalBinding('fs').internalModuleReadJSON = (pathArgument: string) => {
+  const { internalModuleReadJSON } = internalBinding('node:fs');
+  internalBinding('node:fs').internalModuleReadJSON = (pathArgument: string) => {
     const pathInfo = splitPath(pathArgument);
     if (!pathInfo.isAsar) return internalModuleReadJSON(pathArgument);
     const { asarPath, filePath } = pathInfo;
@@ -741,8 +741,8 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
     return [str, str.length > 0];
   };
 
-  const { internalModuleStat } = internalBinding('fs');
-  internalBinding('fs').internalModuleStat = (pathArgument: string) => {
+  const { internalModuleStat } = internalBinding('node:fs');
+  internalBinding('node:fs').internalModuleStat = (pathArgument: string) => {
     const pathInfo = splitPath(pathArgument);
     if (!pathInfo.isAsar) return internalModuleStat(pathArgument);
     const { asarPath, filePath } = pathInfo;

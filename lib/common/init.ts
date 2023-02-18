@@ -1,4 +1,4 @@
-import * as util from 'util';
+import * as util from 'node:util';
 
 const timers = require('timers');
 

@@ -1,4 +1,4 @@
-import * as events from 'events';
+import * as events from 'node:events';
 import { IPC_MESSAGES } from '@electron/internal/common/ipc-messages';
 
 import type * as ipcRendererUtilsModule from '@electron/internal/renderer/ipc-renderer-internal-utils';

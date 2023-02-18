@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 
 const { ipc } = process._linkedBinding('electron_renderer_ipc');
 
