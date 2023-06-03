@@ -379,8 +379,11 @@ bool NodeBindings::IsInitialized() {
 // Initialize Node.js cli options to pass to Node.js
 // See https://nodejs.org/api/cli.html#cli_options
 void NodeBindings::SetNodeCliFlags() {
-  const std::unordered_set<base::StringPiece, base::StringPieceHash> allowed =
-      GetAllowedDebugOptions();
+  auto allowed = GetAllowedDebugOptions();
+  if (browser_env_ == BrowserEnvironment::kRenderer ||
+      browser_env_ == BrowserEnvironment::kUtility) {
+    allowed.emplace("--frozen-intrinsics");
+  }
 
   const auto argv = base::CommandLine::ForCurrentProcess()->argv();
   std::vector<std::string> args;

@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Milan Burda <milan.burda@gmail.com>
+Date: Sat, 3 Jun 2023 23:18:01 +0200
+Subject: fix: make SharedArrayBuffer optional in freeze_intrinsics.js
+
+https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#api_availability
+
+diff --git a/lib/internal/freeze_intrinsics.js b/lib/internal/freeze_intrinsics.js
+index 72ba32589338b0f68944c6382a58cb277eb2f5c8..793c19df1e91386367620f4cacedcf47fcf86b76 100644
+--- a/lib/internal/freeze_intrinsics.js
++++ b/lib/internal/freeze_intrinsics.js
+@@ -203,7 +203,6 @@ module.exports = function() {
+ 
+     // 25 Structured Data
+     ArrayBufferPrototype, // 25.1
+-    SharedArrayBuffer.prototype, // 25.2
+     DataViewPrototype, // 25.3
+ 
+     // 26 Managing Memory
+@@ -309,7 +308,6 @@ module.exports = function() {
+ 
+     // 25 Structured Data
+     ArrayBuffer, // 25.1
+-    SharedArrayBuffer, // 25.2
+     DataView, // 25.3
+     Atomics, // 25.4
+     // eslint-disable-next-line node-core/prefer-primordials
+@@ -354,6 +352,11 @@ module.exports = function() {
+     WebAssembly,
+   ];
+ 
++  if (typeof SharedArrayBuffer !== 'undefined') { // 25.2
++    ArrayPrototypePush(intrinsicPrototypes, SharedArrayBuffer.prototype);
++    ArrayPrototypePush(intrinsics, SharedArrayBuffer);
++  }
++
+   if (typeof Intl !== 'undefined') {
+     ArrayPrototypePush(intrinsicPrototypes,
+                        Intl.Collator.prototype,
