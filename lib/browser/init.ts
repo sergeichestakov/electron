@@ -4,7 +4,7 @@ import * as path from 'path';
 
 import type * as defaultMenuModule from '@electron/internal/browser/default-menu';
 
-const Module = require('module');
+const Module = require('module') as NodeJS.ModuleInternal;
 
 // We modified the original process.argv to let node.js load the init.js,
 // we need to restore it here.
@@ -184,7 +184,7 @@ app.once('will-finish-launching', setDefaultApplicationMenu);
 
 if (packagePath) {
   // Finally load app's main.js and transfer control to C++.
-  process._firstFileName = Module._resolveFilename(path.join(packagePath, mainStartupScript), null, false);
+  process._firstFileName = Module._resolveFilename(path.join(packagePath, mainStartupScript));
   Module._load(path.join(packagePath, mainStartupScript), Module, true);
 } else {
   console.error('Failed to locate a valid package to load (app, app.asar or default_app.asar)');

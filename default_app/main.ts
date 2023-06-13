@@ -15,7 +15,7 @@ type DefaultAppOptions = {
   modules: string[];
 }
 
-const Module = require('module');
+const Module = require('module') as NodeJS.ModuleInternal;
 
 // Parse command line options.
 const argv = process.argv.slice(1);

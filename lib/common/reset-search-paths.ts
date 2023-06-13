@@ -1,16 +1,16 @@
 import * as path from 'path';
 
-const Module = require('module');
+const Module = require('module') as NodeJS.ModuleInternal;
 
 // We do not want to allow use of the VM module in the renderer process as
 // it conflicts with Blink's V8::Context internal logic.
 if (process.type === 'renderer') {
   const _load = Module._load;
-  Module._load = function (request: string) {
+  Module._load = function (request: string, parent: NodeJS.Module, isMain: boolean) {
     if (request === 'vm') {
       console.warn('The vm module of Node.js is deprecated in the renderer process and will be removed.');
     }
-    return _load.apply(this, arguments);
+    return _load(request, parent, isMain);
   };
 }
 
@@ -32,7 +32,7 @@ Module._nodeModulePaths = function (from: string) {
 
 // Make a fake Electron module that we will insert into the module cache
 const makeElectronModule = (name: string) => {
-  const electronModule = new Module('electron', null);
+  const electronModule = new Module('electron');
   electronModule.id = 'electron';
   electronModule.loaded = true;
   electronModule.filename = name;
@@ -60,7 +60,7 @@ const originalResolveFilename = Module._resolveFilename;
 // renderer process regardless of the names, they're superficial for TypeScript
 // only.
 const electronModuleNames = new Set(['electron', 'electron/main', 'electron/renderer', 'electron/common']);
-Module._resolveFilename = function (request: string, parent: NodeModule, isMain: boolean, options?: { paths: Array<string>}) {
+Module._resolveFilename = function (request: string, parent?: NodeJS.Module, isMain?: boolean, options?: { paths: string[] }) {
   if (electronModuleNames.has(request)) {
     return 'electron';
   } else {

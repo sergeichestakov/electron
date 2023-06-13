@@ -5,7 +5,7 @@ import type * as Crypto from 'crypto';
 
 const asar = process._linkedBinding('electron_common_asar');
 
-const Module = require('module');
+const Module = require('module') as NodeJS.ModuleInternal;
 
 const Promise: PromiseConstructor = global.Promise;
 
@@ -836,8 +836,8 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
     overrideChildProcess(require('child_process'));
   } else {
     const originalModuleLoad = Module._load;
-    Module._load = (request: string, ...args: any[]) => {
-      const loadResult = originalModuleLoad(request, ...args);
+    Module._load = (request: string, parent: NodeJS.Module, isMain: boolean) => {
+      const loadResult = originalModuleLoad(request, parent, isMain);
       if (request === 'child_process') {
         if (!asarReady.has(loadResult)) {
           asarReady.add(loadResult);

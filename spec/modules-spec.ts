@@ -7,7 +7,7 @@ import { closeAllWindows } from './lib/window-helpers';
 import * as childProcess from 'child_process';
 import { once } from 'events';
 
-const Module = require('module');
+const Module = require('module') as NodeJS.ModuleInternal;
 
 const nativeModulesEnabled = !process.env.ELECTRON_SKIP_NATIVE_MODULE_TESTS;
 
