@@ -518,8 +518,8 @@ node::Environment* NodeBindings::CreateEnvironment(
 
   args.insert(args.begin() + 1, init_script);
 
-  if (!isolate_data_)
-    isolate_data_ = node::CreateIsolateData(isolate, uv_loop_, platform);
+  if (!isolate_data())
+    set_isolate_data(node::CreateIsolateData(isolate, uv_loop_, platform));
 
   node::Environment* env;
   uint64_t flags = node::EnvironmentFlags::kDefaultFlags |

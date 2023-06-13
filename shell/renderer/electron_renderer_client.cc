@@ -18,6 +18,7 @@
 #include "shell/renderer/electron_render_frame_observer.h"
 #include "shell/renderer/web_worker_observer.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
+#include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"  // nogncheck
@@ -30,7 +31,30 @@ ElectronRendererClient::ElectronRendererClient()
       electron_bindings_(
           std::make_unique<ElectronBindings>(node_bindings_->uv_loop())) {}
 
-ElectronRendererClient::~ElectronRendererClient() = default;
+ElectronRendererClient::~ElectronRendererClient() {
+  if (!env_)
+    return;
+
+  // Destroying the node environment will also run the uv loop,
+  // Node.js expects `kExplicit` microtasks policy and will run microtasks
+  // checkpoints after every call into JavaScript. Since we use a different
+  // policy in the renderer - switch to `kExplicit` and then drop back to the
+  // previous policy value.
+  v8::Local<v8::Context> context = env_->context();
+  v8::MicrotaskQueue* microtask_queue = context->GetMicrotaskQueue();
+  auto old_policy = microtask_queue->microtasks_policy();
+  DCHECK_EQ(microtask_queue->GetMicrotasksScopeDepth(), 0);
+  microtask_queue->set_microtasks_policy(v8::MicrotasksPolicy::kExplicit);
+
+  node::FreeEnvironment(env_);
+  node::FreeIsolateData(node_bindings_->isolate_data());
+  node_bindings_->set_isolate_data(nullptr);
+
+  microtask_queue->set_microtasks_policy(old_policy);
+
+  // ElectronBindings is tracking node environments.
+  electron_bindings_->EnvironmentDestroyed(env_);
+}
 
 void ElectronRendererClient::RenderFrameCreated(
     content::RenderFrame* render_frame) {
@@ -60,22 +84,25 @@ void ElectronRendererClient::RunScriptsAtDocumentEnd(
                           "document-end");
 }
 
+/*
+It's possible
+*/
 void ElectronRendererClient::DidCreateScriptContext(
-    v8::Handle<v8::Context> renderer_context,
+    v8::Handle<v8::Context> context,
     content::RenderFrame* render_frame) {
   // TODO(zcbenz): Do not create Node environment if node integration is not
   // enabled.
 
   // Only load Node.js if we are a main frame or a devtools extension
   // unless Node.js support has been explicitly enabled for subframes.
-  if (!ShouldLoadPreload(renderer_context, render_frame))
+  if (!ShouldLoadPreload(context, render_frame))
     return;
 
   injected_frames_.insert(render_frame);
 
   if (!node_integration_initialized_) {
     node_integration_initialized_ = true;
-    node_bindings_->Initialize(renderer_context);
+    node_bindings_->Initialize(context);
     node_bindings_->PrepareEmbedThread();
   }
 
@@ -83,75 +110,51 @@ void ElectronRendererClient::DidCreateScriptContext(
   if (!node::tracing::TraceEventHelper::GetAgent())
     node::tracing::TraceEventHelper::SetAgent(node::CreateAgent());
 
-  // Setup node environment for each window.
-  v8::Maybe<bool> initialized = node::InitializeContext(renderer_context);
+  v8::Maybe<bool> initialized = node::InitializeContext(context);
   CHECK(!initialized.IsNothing() && initialized.FromJust());
 
-  node::Environment* env =
-      node_bindings_->CreateEnvironment(renderer_context, nullptr);
+  // If DidCreateScriptContext is called and we've already created a Node.js
+  // Environment, then we're in the same process with a new V8::Context. We
+  // should assign the existing Environment to the new V8::Context.
+  if (env_) {
+    env_->AssignToContext(context, nullptr, node::ContextInfo(""));
+    return;
+  }
+
+  env_ = node_bindings_->CreateEnvironment(context, nullptr);
 
   // If we have disabled the site instance overrides we should prevent loading
   // any non-context aware native module.
-  env->options()->force_context_aware = true;
+  env_->options()->force_context_aware = true;
 
   // We do not want to crash the renderer process on unhandled rejections.
-  env->options()->unhandled_rejections = "warn-with-error-code";
-
-  environments_.insert(env);
+  env_->options()->unhandled_rejections = "warn-with-error-code";
 
   // Add Electron extended APIs.
-  electron_bindings_->BindTo(env->isolate(), env->process_object());
-  gin_helper::Dictionary process_dict(env->isolate(), env->process_object());
-  BindProcess(env->isolate(), &process_dict, render_frame);
+  electron_bindings_->BindTo(env_->isolate(), env_->process_object());
+  gin_helper::Dictionary process_dict(env_->isolate(), env_->process_object());
+  BindProcess(env_->isolate(), &process_dict, render_frame);
 
-  // Load everything.
-  node_bindings_->LoadEnvironment(env);
+  // Load the Environment.
+  node_bindings_->LoadEnvironment(env_);
 
-  if (node_bindings_->uv_env() == nullptr) {
-    // Make uv loop being wrapped by window context.
-    node_bindings_->set_uv_env(env);
+  // Make uv loop being wrapped by window context.
+  node_bindings_->set_uv_env(env_);
 
-    // Give the node loop a run to make sure everything is ready.
-    node_bindings_->StartPolling();
-  }
+  // Give the node loop a run to make sure everything is ready.
+  node_bindings_->StartPolling();
 }
 
 void ElectronRendererClient::WillReleaseScriptContext(
     v8::Handle<v8::Context> context,
     content::RenderFrame* render_frame) {
-  if (injected_frames_.erase(render_frame) == 0)
+  auto* env = node::Environment::GetCurrent(context);
+  if (injected_frames_.erase(render_frame) == 0 || !env)
     return;
 
-  node::Environment* env = node::Environment::GetCurrent(context);
-  if (environments_.erase(env) == 0)
-    return;
+  gin_helper::EmitEvent(env_->isolate(), env_->process_object(), "exit");
 
-  gin_helper::EmitEvent(env->isolate(), env->process_object(), "exit");
-
-  // The main frame may be replaced.
-  if (env == node_bindings_->uv_env())
-    node_bindings_->set_uv_env(nullptr);
-
-  // Destroying the node environment will also run the uv loop,
-  // Node.js expects `kExplicit` microtasks policy and will run microtasks
-  // checkpoints after every call into JavaScript. Since we use a different
-  // policy in the renderer - switch to `kExplicit` and then drop back to the
-  // previous policy value.
-  v8::MicrotaskQueue* microtask_queue = context->GetMicrotaskQueue();
-  auto old_policy = microtask_queue->microtasks_policy();
-  DCHECK_EQ(microtask_queue->GetMicrotasksScopeDepth(), 0);
-  microtask_queue->set_microtasks_policy(v8::MicrotasksPolicy::kExplicit);
-
-  node::FreeEnvironment(env);
-  if (node_bindings_->uv_env() == nullptr) {
-    node::FreeIsolateData(node_bindings_->isolate_data());
-    node_bindings_->set_isolate_data(nullptr);
-  }
-
-  microtask_queue->set_microtasks_policy(old_policy);
-
-  // ElectronBindings is tracking node environments.
-  electron_bindings_->EnvironmentDestroyed(env);
+  env->UntrackContext(context);
 }
 
 void ElectronRendererClient::WorkerScriptReadyForEvaluationOnWorkerThread(
@@ -196,11 +199,7 @@ node::Environment* ElectronRendererClient::GetEnvironment(
     content::RenderFrame* render_frame) const {
   if (!base::Contains(injected_frames_, render_frame))
     return nullptr;
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
-  auto context =
-      GetContext(render_frame->GetWebFrame(), v8::Isolate::GetCurrent());
-  node::Environment* env = node::Environment::GetCurrent(context);
-  return base::Contains(environments_, env) ? env : nullptr;
+  return env_;
 }
 
 }  // namespace electron
