@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: John Kleinschmidt <jkleinsc@electronjs.org>
+Date: Tue, 13 Jun 2023 16:16:14 -0400
+Subject: chore: debug random DCHECK on Windows
+
+Find out why DCHECK_NE(g_high_res_timer_count, 0u) is firing.
+
+diff --git a/base/time/time_win.cc b/base/time/time_win.cc
+index c6540592a5c1865c125810ca09f53b0540c00aa1..0753ee134b0e65025c2b24348099466339983fe3 100644
+--- a/base/time/time_win.cc
++++ b/base/time/time_win.cc
+@@ -32,6 +32,7 @@
+ // power.
+ 
+ #include "base/time/time.h"
++#include "base/debug/stack_trace.h"
+ 
+ #include <windows.foundation.h>
+ #include <windows.h>
+@@ -272,9 +273,16 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
+ 
+   AutoLock lock(*GetHighResLock());
+   if (activating) {
++    LOG(INFO) << "Time::ActivateHighResolutionTimer(true)";
++    base::debug::StackTrace().Print();
+     DCHECK_NE(g_high_res_timer_count, max);
+     ++g_high_res_timer_count;
+   } else {
++    LOG(INFO) << "Time::ActivateHighResolutionTimer(false)";
++    base::debug::StackTrace().Print();
++    if (g_high_res_timer_count == 0u) {
++       LOG(INFO) << "Time::ActivateHighResolutionTimer(false) DANGER!!!!";
++    }
+     DCHECK_NE(g_high_res_timer_count, 0u);
+     --g_high_res_timer_count;
+   }
