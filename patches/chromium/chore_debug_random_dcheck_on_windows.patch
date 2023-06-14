@@ -5,33 +5,67 @@ Subject: chore: debug random DCHECK on Windows
 
 Find out why DCHECK_NE(g_high_res_timer_count, 0u) is firing.
 
+diff --git a/base/task/sequence_manager/thread_controller_with_message_pump_impl.cc b/base/task/sequence_manager/thread_controller_with_message_pump_impl.cc
+index 7e027675a96044bd6ef79ea9f41f5d32dfdca5e4..563ccc2151c39ad5b8fc9453f4096116088e66c7 100644
+--- a/base/task/sequence_manager/thread_controller_with_message_pump_impl.cc
++++ b/base/task/sequence_manager/thread_controller_with_message_pump_impl.cc
+@@ -138,6 +138,7 @@ ThreadControllerWithMessagePumpImpl::~ThreadControllerWithMessagePumpImpl() {
+ #if BUILDFLAG(IS_WIN)
+   if (main_thread_only().in_high_res_mode) {
+     main_thread_only().in_high_res_mode = false;
++    LOG(INFO) << "CALLING  Time::ActivateHighResolutionTimer(false); FROM ThreadControllerWithMessagePumpImpl::~ThreadControllerWithMessagePumpImpl ";
+     Time::ActivateHighResolutionTimer(false);
+   }
+ #endif
+@@ -341,6 +342,7 @@ ThreadControllerWithMessagePumpImpl::DoWork() {
+   if (g_use_less_high_res_timers.load(std::memory_order_relaxed) &&
+       main_thread_only().in_high_res_mode) {
+     main_thread_only().in_high_res_mode = false;
++    LOG(INFO) << "CALLING  Time::ActivateHighResolutionTimer(false); FROM ThreadControllerWithMessagePumpImpl::DoWork ";
+     Time::ActivateHighResolutionTimer(false);
+   }
+ #endif
+@@ -579,6 +581,9 @@ bool ThreadControllerWithMessagePumpImpl::DoIdleWork() {
+       // do this the default resolution is 15ms which might not be acceptable
+       // for some tasks.
+       main_thread_only().in_high_res_mode = need_high_res_mode;
++      if (!need_high_res_mode) {
++        LOG(INFO) << "CALLING  Time::ActivateHighResolutionTimer(false); FROM ThreadControllerWithMessagePumpImpl::DoIdleWork ";
++      }
+       Time::ActivateHighResolutionTimer(need_high_res_mode);
+     }
+   }
 diff --git a/base/time/time_win.cc b/base/time/time_win.cc
-index c6540592a5c1865c125810ca09f53b0540c00aa1..3ae7e8c180b6a05b925aabb8e7b6a82c76e3d55d 100644
+index c6540592a5c1865c125810ca09f53b0540c00aa1..4c4f8b714db05acfafb0154018a83ca481039b19 100644
 --- a/base/time/time_win.cc
 +++ b/base/time/time_win.cc
-@@ -32,6 +32,8 @@
+@@ -32,6 +32,7 @@
  // power.
  
  #include "base/time/time.h"
 +#include "base/logging.h"
-+#include "base/debug/stack_trace.h"
  
  #include <windows.foundation.h>
  #include <windows.h>
-@@ -272,9 +274,16 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
- 
-   AutoLock lock(*GetHighResLock());
-   if (activating) {
-+    LOG(INFO) << "Time::ActivateHighResolutionTimer(true)";
-+    base::debug::StackTrace().Print();
+@@ -275,6 +276,9 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
      DCHECK_NE(g_high_res_timer_count, max);
      ++g_high_res_timer_count;
    } else {
-+    LOG(INFO) << "Time::ActivateHighResolutionTimer(false)";
-+    base::debug::StackTrace().Print();
 +    if (g_high_res_timer_count == 0u) {
 +       LOG(INFO) << "Time::ActivateHighResolutionTimer(false) DANGER!!!!";
 +    }
      DCHECK_NE(g_high_res_timer_count, 0u);
      --g_high_res_timer_count;
    }
+diff --git a/ui/gl/vsync_thread_win.cc b/ui/gl/vsync_thread_win.cc
+index d9836e3907825a387c21fc23051ec7ed99d5ee19..6c0999979ee1364f578e3c02cdba81358d041bd7 100644
+--- a/ui/gl/vsync_thread_win.cc
++++ b/ui/gl/vsync_thread_win.cc
+@@ -147,6 +147,7 @@ void VSyncThreadWin::WaitForVSync() {
+     TRACE_EVENT("gpu", "WaitForVSync Sleep");
+     base::Time::ActivateHighResolutionTimer(true);
+     Sleep(static_cast<DWORD>(vsync_interval.InMillisecondsRoundedUp()));
++    LOG(INFO) << "In VSyncThreadWin::WaitForVSync about to call base::Time::ActivateHighResolutionTimer(false)";
+     base::Time::ActivateHighResolutionTimer(false);
+   }
+ 
