@@ -6,18 +6,19 @@ Subject: chore: debug random DCHECK on Windows
 Find out why DCHECK_NE(g_high_res_timer_count, 0u) is firing.
 
 diff --git a/base/time/time_win.cc b/base/time/time_win.cc
-index c6540592a5c1865c125810ca09f53b0540c00aa1..0753ee134b0e65025c2b24348099466339983fe3 100644
+index c6540592a5c1865c125810ca09f53b0540c00aa1..3ae7e8c180b6a05b925aabb8e7b6a82c76e3d55d 100644
 --- a/base/time/time_win.cc
 +++ b/base/time/time_win.cc
-@@ -32,6 +32,7 @@
+@@ -32,6 +32,8 @@
  // power.
  
  #include "base/time/time.h"
++#include "base/logging.h"
 +#include "base/debug/stack_trace.h"
  
  #include <windows.foundation.h>
  #include <windows.h>
-@@ -272,9 +273,16 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
+@@ -272,9 +274,16 @@ bool Time::ActivateHighResolutionTimer(bool activating) {
  
    AutoLock lock(*GetHighResLock());
    if (activating) {
