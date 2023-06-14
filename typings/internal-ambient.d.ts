@@ -16,7 +16,6 @@ declare namespace NodeJS {
 
   interface FeaturesBinding {
     isBuiltinSpellCheckerEnabled(): boolean;
-    isOffscreenRenderingEnabled(): boolean;
     isPDFViewerEnabled(): boolean;
     isFakeLocationProviderEnabled(): boolean;
     isViewApiEnabled(): boolean;
