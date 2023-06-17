@@ -332,11 +332,15 @@ void JavascriptEnvironment::CreateMicrotasksRunner() {
 
 void JavascriptEnvironment::DestroyMicrotasksRunner() {
   DCHECK(microtasks_runner_);
-  {
-    v8::HandleScope scope(isolate_);
-    gin_helper::CleanedUpAtExit::DoCleanup();
-  }
+  microtasks_runner_->PerformCheckpoint();
+  DestroyTrackedObjects();
   base::CurrentThread::Get()->RemoveTaskObserver(microtasks_runner_.get());
+  microtasks_runner_.reset();
+}
+
+void JavascriptEnvironment::DestroyTrackedObjects() {
+  v8::HandleScope scope(isolate_);
+  gin_helper::CleanedUpAtExit::DoCleanup();
 }
 
 NodeEnvironment::NodeEnvironment(node::Environment* env) : env_(env) {}

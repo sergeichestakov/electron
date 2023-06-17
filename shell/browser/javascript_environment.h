@@ -41,6 +41,9 @@ class JavascriptEnvironment {
 
  private:
   v8::Isolate* Initialize(uv_loop_t* event_loop, bool setup_wasm_streaming);
+
+  void DestroyTrackedObjects();
+
   std::unique_ptr<node::MultiIsolatePlatform> platform_;
 
   raw_ptr<v8::Isolate> isolate_;
