@@ -6,6 +6,7 @@
 #define ELECTRON_SHELL_BROWSER_API_ELECTRON_API_SAFE_STORAGE_H_
 
 #include "base/dcheck_is_on.h"
+#include "build/build_config.h"
 
 namespace electron::safestorage {
 
@@ -14,6 +15,10 @@ namespace electron::safestorage {
 // testing build
 #if DCHECK_IS_ON()
 void SetElectronCryptoReady(bool ready);
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+bool use_password_v10_ = false;
 #endif
 
 }  // namespace electron::safestorage

@@ -38,3 +38,18 @@ Returns `string` - the decrypted string. Decrypts the encrypted buffer
 obtained  with `safeStorage.encryptString` back into a string.
 
 This function will throw an error if decryption fails.
+
+### `safeStorage.setUsePlainTextEncryption(usePlainText)` _Linux_
+
+* `usePlainText` boolean
+
+This function will force the module to use an in memory password for creating
+symmetric key used for encrypt/decrypt functions when a valid OS password
+manager cannot be initialized on Linux.
+
+### `safeStorage.getSelectedStorageBackend()` _Linux_
+
+Returns `string` - User friendly name of the password manager initialized on Linux.
+
+This function will return one of the following values: `basic_text`, `gnome_any`,
+`gnome_libsecret`, `gnome_keyring`, `kwallet`, `kwallet5`, `kwallet6`.

@@ -1,0 +1,112 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: deepak1556 <hop2deep@gmail.com>
+Date: Tue, 20 Jun 2023 23:18:17 +0900
+Subject: feat: expose oscrypt backend information on linux
+
+This change exposes the backend selected by oscrypt for storing the encryption key
+password on linux. This is useful for applications to know the backend details at runtime
+for a given desktop environment and associate storage failures to it.
+
+diff --git a/components/os_crypt/sync/key_storage_config_linux.h b/components/os_crypt/sync/key_storage_config_linux.h
+index 04abe0285f03ea06d08131806c98d8a820beed50..70f3d9e3bc471ecbdc9827249b55fbacc29b9939 100644
+--- a/components/os_crypt/sync/key_storage_config_linux.h
++++ b/components/os_crypt/sync/key_storage_config_linux.h
+@@ -35,6 +35,8 @@ struct COMPONENT_EXPORT(OS_CRYPT) Config {
+   // Only used when the allow_runtime_configurable_key_storage feature is
+   // enabled.
+   std::string application_name;
++  // The user friendly name of the password store selected.
++  std::string selected_linux_backend;
+   // A runner on the main thread for gnome-keyring to be called from.
+   // TODO(crbug/466975): Libsecret and KWallet don't need this. We can remove
+   // this when we stop supporting keyring.
+diff --git a/components/os_crypt/sync/key_storage_linux.cc b/components/os_crypt/sync/key_storage_linux.cc
+index 42a59c4b356020390a9c250b6858e796ba8365d0..e3637793b3076de3fd8596d89ebae0c9522778d9 100644
+--- a/components/os_crypt/sync/key_storage_linux.cc
++++ b/components/os_crypt/sync/key_storage_linux.cc
+@@ -88,7 +88,7 @@ constexpr BackendUsage SelectedBackendToMetric(
+   return BackendUsage::kDeferFailed;
+ }
+ 
+-const char* SelectedLinuxBackendToString(
++std::string SelectedLinuxBackendToString(
+     os_crypt::SelectedLinuxBackend selection) {
+   switch (selection) {
+     case os_crypt::SelectedLinuxBackend::DEFER:
+@@ -125,8 +125,9 @@ std::unique_ptr<KeyStorageLinux> KeyStorageLinux::CreateService(
+       base::nix::GetDesktopEnvironment(env.get());
+   os_crypt::SelectedLinuxBackend selected_backend =
+       os_crypt::SelectBackend(config.store, use_backend, desktop_env);
++  config.selected_linux_backend = SelectedLinuxBackendToString(selected_backend);
+   VLOG(1) << "Selected backend for OSCrypt: "
+-          << SelectedLinuxBackendToString(selected_backend);
++          << config.selected_linux_backend;
+ 
+   // TODO(crbug.com/782851) Schedule the initialisation on each backend's
+   // favourite thread.
+diff --git a/components/os_crypt/sync/os_crypt.h b/components/os_crypt/sync/os_crypt.h
+index be4d66b20b22d94ddae309738d631c2e776f394a..cb45707a424644bf338821646019d0ae2aee585d 100644
+--- a/components/os_crypt/sync/os_crypt.h
++++ b/components/os_crypt/sync/os_crypt.h
+@@ -39,6 +39,8 @@ namespace OSCrypt {
+ #if BUILDFLAG(IS_LINUX)
+ COMPONENT_EXPORT(OS_CRYPT)
+ void SetConfig(std::unique_ptr<os_crypt::Config> config);
++COMPONENT_EXPORT(OS_CRYPT)
++std::string GetSelectedLinuxBackend();
+ #endif  // BUILDFLAG(IS_LINUX)
+ COMPONENT_EXPORT(OS_CRYPT) bool IsEncryptionAvailable();
+ COMPONENT_EXPORT(OS_CRYPT)
+@@ -113,6 +115,10 @@ class COMPONENT_EXPORT(OS_CRYPT) OSCryptImpl {
+   // This method, or SetRawEncryptionKey(), must be called before using
+   // EncryptString() and DecryptString().
+   void SetConfig(std::unique_ptr<os_crypt::Config> config);
++
++  // Returns the storage backend selected on Linux for saving
++  // the encryption key password.
++  std::string GetSelectedLinuxBackend();
+ #endif  // BUILDFLAG(IS_LINUX)
+ 
+   // On Linux returns true iff the real secret key (not hardcoded one) is
+@@ -254,6 +260,8 @@ class COMPONENT_EXPORT(OS_CRYPT) OSCryptImpl {
+   // |config_| is used to initialise |password_v11_cache_| and then cleared.
+   std::unique_ptr<os_crypt::Config> config_;
+ 
++  std::string selected_linux_backend_;
++
+   base::OnceCallback<std::unique_ptr<KeyStorageLinux>()>
+       storage_provider_factory_;
+ #endif  // BUILDFLAG(IS_LINUX)
+diff --git a/components/os_crypt/sync/os_crypt_linux.cc b/components/os_crypt/sync/os_crypt_linux.cc
+index 92a71784132172e841af9d956144aa54ed822001..c6e65b1845f6dfc68c59f96bd1fd523df80230d5 100644
+--- a/components/os_crypt/sync/os_crypt_linux.cc
++++ b/components/os_crypt/sync/os_crypt_linux.cc
+@@ -87,6 +87,9 @@ namespace OSCrypt {
+ void SetConfig(std::unique_ptr<os_crypt::Config> config) {
+   OSCryptImpl::GetInstance()->SetConfig(std::move(config));
+ }
++std::string GetSelectedLinuxBackend() {
++  return OSCryptImpl::GetInstance()->GetSelectedLinuxBackend();
++}
+ bool EncryptString16(const std::u16string& plaintext, std::string* ciphertext) {
+   return OSCryptImpl::GetInstance()->EncryptString16(plaintext, ciphertext);
+ }
+@@ -245,6 +248,10 @@ void OSCryptImpl::SetConfig(std::unique_ptr<os_crypt::Config> config) {
+   config_ = std::move(config);
+ }
+ 
++std::string OSCryptImpl::GetSelectedLinuxBackend() {
++  return selected_linux_backend_;
++}
++
+ bool OSCryptImpl::IsEncryptionAvailable() {
+   return GetPasswordV11();
+ }
+@@ -299,6 +306,7 @@ std::unique_ptr<KeyStorageLinux> OSCryptImpl::CreateKeyStorage() {
+   CHECK(config_);
+   std::unique_ptr<KeyStorageLinux> key_storage =
+       KeyStorageLinux::CreateService(*config_);
++  selected_linux_backend_ = config_->selected_linux_backend;
+   config_.reset();
+   return key_storage;
+ }

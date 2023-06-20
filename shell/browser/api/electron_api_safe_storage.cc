@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/strings/string_util.h"
 #include "components/os_crypt/sync/os_crypt.h"
 #include "shell/browser/browser.h"
 #include "shell/common/gin_converters/base_converter.h"
@@ -34,9 +35,22 @@ bool IsEncryptionAvailable() {
   // Refs: https://github.com/electron/electron/issues/32206.
   if (!Browser::Get()->is_ready())
     return false;
+  return OSCrypt::IsEncryptionAvailable() || use_password_v10_;
 #endif
   return OSCrypt::IsEncryptionAvailable();
 }
+
+#if BUILDFLAG(IS_LINUX)
+void SetUsePasswordV10(bool use_password_v10) {
+  use_password_v10_ = use_password_v10;
+}
+
+std::string GetSelectedLinuxBackend() {
+  if (!Browser::Get()->is_ready())
+    return "";
+  return base::ToLowerASCII(OSCrypt::GetSelectedLinuxBackend());
+}
+#endif
 
 v8::Local<v8::Value> EncryptString(v8::Isolate* isolate,
                                    const std::string& plaintext) {
@@ -47,8 +61,8 @@ v8::Local<v8::Value> EncryptString(v8::Isolate* isolate,
       return v8::Local<v8::Value>();
     }
     gin_helper::ErrorThrower(isolate).ThrowError(
-        "Error while decrypting the ciphertext provided to "
-        "safeStorage.decryptString. "
+        "Error while encrypting the text provided to "
+        "safeStorage.encryptString. "
         "Encryption is not available.");
     return v8::Local<v8::Value>();
   }
@@ -128,6 +142,12 @@ void Initialize(v8::Local<v8::Object> exports,
                  &electron::safestorage::IsEncryptionAvailable);
   dict.SetMethod("encryptString", &electron::safestorage::EncryptString);
   dict.SetMethod("decryptString", &electron::safestorage::DecryptString);
+#if BUILDFLAG(IS_LINUX)
+  dict.SetMethod("setUsePlainTextEncryption",
+                 &electron::safestorage::SetUsePasswordV10);
+  dict.SetMethod("getSelectedStorageBackend",
+                 &electron::safestorage::GetSelectedLinuxBackend);
+#endif
 }
 
 NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_safe_storage, Initialize)
