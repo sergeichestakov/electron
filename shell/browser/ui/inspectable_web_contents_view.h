@@ -7,7 +7,6 @@
 #define ELECTRON_SHELL_BROWSER_UI_INSPECTABLE_WEB_CONTENTS_VIEW_H_
 
 #include <string>
-#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "shell/common/api/api.mojom.h"
@@ -45,10 +44,6 @@ class InspectableWebContentsView {
 #if defined(TOOLKIT_VIEWS) && !BUILDFLAG(IS_MAC)
   // Returns the container control, which has devtools view attached.
   virtual views::View* GetView() = 0;
-
-  // Returns the web view control, which can be used by the
-  // GetInitiallyFocusedView() to set initial focus to web view.
-  virtual views::View* GetWebView() = 0;
 #else
   virtual gfx::NativeView GetNativeView() const = 0;
 #endif

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/containers/span.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
@@ -140,40 +141,25 @@ struct Converter<JumpListItem::Type> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      JumpListItem::Type* out) {
-    std::string item_type;
-    if (!ConvertFromV8(isolate, val, &item_type))
-      return false;
-
-    if (item_type == "task")
-      *out = JumpListItem::Type::kTask;
-    else if (item_type == "separator")
-      *out = JumpListItem::Type::kSeparator;
-    else if (item_type == "file")
-      *out = JumpListItem::Type::kFile;
-    else
-      return false;
-
-    return true;
+    return FromV8WithLookup(isolate, val, Lookup, out);
   }
 
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    JumpListItem::Type val) {
-    std::string item_type;
-    switch (val) {
-      case JumpListItem::Type::kTask:
-        item_type = "task";
-        break;
+    for (const auto& [name, item_val] : Lookup)
+      if (item_val == val)
+        return gin::ConvertToV8(isolate, name);
 
-      case JumpListItem::Type::kSeparator:
-        item_type = "separator";
-        break;
-
-      case JumpListItem::Type::kFile:
-        item_type = "file";
-        break;
-    }
-    return gin::ConvertToV8(isolate, item_type);
+    return gin::ConvertToV8(isolate, "");
   }
+
+ private:
+  static constexpr auto Lookup =
+      base::MakeFixedFlatMapSorted<base::StringPiece, JumpListItem::Type>({
+          {"file", JumpListItem::Type::kFile},
+          {"separator", JumpListItem::Type::kSeparator},
+          {"task", JumpListItem::Type::kTask},
+      });
 };
 
 template <>
@@ -246,46 +232,26 @@ struct Converter<JumpListCategory::Type> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      JumpListCategory::Type* out) {
-    std::string category_type;
-    if (!ConvertFromV8(isolate, val, &category_type))
-      return false;
-
-    if (category_type == "tasks")
-      *out = JumpListCategory::Type::kTasks;
-    else if (category_type == "frequent")
-      *out = JumpListCategory::Type::kFrequent;
-    else if (category_type == "recent")
-      *out = JumpListCategory::Type::kRecent;
-    else if (category_type == "custom")
-      *out = JumpListCategory::Type::kCustom;
-    else
-      return false;
-
-    return true;
+    return FromV8WithLookup(isolate, val, Lookup, out);
   }
 
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    JumpListCategory::Type val) {
-    std::string category_type;
-    switch (val) {
-      case JumpListCategory::Type::kTasks:
-        category_type = "tasks";
-        break;
+    for (const auto& [name, type_val] : Lookup)
+      if (type_val == val)
+        return gin::ConvertToV8(isolate, name);
 
-      case JumpListCategory::Type::kFrequent:
-        category_type = "frequent";
-        break;
-
-      case JumpListCategory::Type::kRecent:
-        category_type = "recent";
-        break;
-
-      case JumpListCategory::Type::kCustom:
-        category_type = "custom";
-        break;
-    }
-    return gin::ConvertToV8(isolate, category_type);
+    return gin::ConvertToV8(isolate, "");
   }
+
+ private:
+  static constexpr auto Lookup =
+      base::MakeFixedFlatMapSorted<base::StringPiece, JumpListCategory::Type>({
+          {"custom", JumpListCategory::Type::kCustom},
+          {"frequent", JumpListCategory::Type::kFrequent},
+          {"recent", JumpListCategory::Type::kRecent},
+          {"tasks", JumpListCategory::Type::kTasks},
+      });
 };
 
 template <>
@@ -439,20 +405,13 @@ struct Converter<net::SecureDnsMode> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      net::SecureDnsMode* out) {
-    std::string s;
-    if (!ConvertFromV8(isolate, val, &s))
-      return false;
-    if (s == "off") {
-      *out = net::SecureDnsMode::kOff;
-      return true;
-    } else if (s == "automatic") {
-      *out = net::SecureDnsMode::kAutomatic;
-      return true;
-    } else if (s == "secure") {
-      *out = net::SecureDnsMode::kSecure;
-      return true;
-    }
-    return false;
+    static constexpr auto Lookup =
+        base::MakeFixedFlatMapSorted<base::StringPiece, net::SecureDnsMode>({
+            {"automatic", net::SecureDnsMode::kAutomatic},
+            {"off", net::SecureDnsMode::kOff},
+            {"secure", net::SecureDnsMode::kSecure},
+        });
+    return FromV8WithLookup(isolate, val, Lookup, out);
   }
 };
 }  // namespace gin
@@ -473,51 +432,38 @@ IconLoader::IconSize GetIconSizeByString(const std::string& size) {
 }
 
 // Return the path constant from string.
-int GetPathConstant(const std::string& name) {
-  if (name == "appData")
-    return DIR_APP_DATA;
-  else if (name == "sessionData")
-    return DIR_SESSION_DATA;
-  else if (name == "userData")
-    return chrome::DIR_USER_DATA;
-  else if (name == "cache")
+constexpr int GetPathConstant(base::StringPiece name) {
+  // clang-format off
+  constexpr auto Lookup = base::MakeFixedFlatMapSorted<base::StringPiece, int>({
+      {"appData", DIR_APP_DATA},
 #if BUILDFLAG(IS_POSIX)
-    return base::DIR_CACHE;
+      {"cache", base::DIR_CACHE},
 #else
-    return base::DIR_ROAMING_APP_DATA;
+      {"cache", base::DIR_ROAMING_APP_DATA},
 #endif
-  else if (name == "userCache")
-    return DIR_USER_CACHE;
-  else if (name == "logs")
-    return DIR_APP_LOGS;
-  else if (name == "crashDumps")
-    return DIR_CRASH_DUMPS;
-  else if (name == "home")
-    return base::DIR_HOME;
-  else if (name == "temp")
-    return base::DIR_TEMP;
-  else if (name == "userDesktop" || name == "desktop")
-    return base::DIR_USER_DESKTOP;
-  else if (name == "exe")
-    return base::FILE_EXE;
-  else if (name == "module")
-    return base::FILE_MODULE;
-  else if (name == "documents")
-    return chrome::DIR_USER_DOCUMENTS;
-  else if (name == "downloads")
-    return chrome::DIR_DEFAULT_DOWNLOADS;
-  else if (name == "music")
-    return chrome::DIR_USER_MUSIC;
-  else if (name == "pictures")
-    return chrome::DIR_USER_PICTURES;
-  else if (name == "videos")
-    return chrome::DIR_USER_VIDEOS;
+      {"crashDumps", DIR_CRASH_DUMPS},
+      {"desktop", base::DIR_USER_DESKTOP},
+      {"documents", chrome::DIR_USER_DOCUMENTS},
+      {"downloads", chrome::DIR_DEFAULT_DOWNLOADS},
+      {"exe", base::FILE_EXE},
+      {"home", base::DIR_HOME},
+      {"logs", DIR_APP_LOGS},
+      {"module", base::FILE_MODULE},
+      {"music", chrome::DIR_USER_MUSIC},
+      {"pictures", chrome::DIR_USER_PICTURES},
 #if BUILDFLAG(IS_WIN)
-  else if (name == "recent")
-    return electron::DIR_RECENT;
+      {"recent", electron::DIR_RECENT},
 #endif
-  else
-    return -1;
+      {"sessionData", DIR_SESSION_DATA},
+      {"temp", base::DIR_TEMP},
+      {"userCache", DIR_USER_CACHE},
+      {"userData", chrome::DIR_USER_DATA},
+      {"userDesktop", base::DIR_USER_DESKTOP},
+      {"videos", chrome::DIR_USER_VIDEOS},
+  });
+  // clang-format on
+  const auto* iter = Lookup.find(name);
+  return iter != Lookup.end() ? iter->second : -1;
 }
 
 bool NotificationCallbackWrapper(

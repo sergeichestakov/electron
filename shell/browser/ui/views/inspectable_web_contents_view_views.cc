@@ -5,9 +5,7 @@
 #include "shell/browser/ui/views/inspectable_web_contents_view_views.h"
 
 #include <memory>
-
 #include <utility>
-#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -108,10 +106,6 @@ InspectableWebContentsViewViews::~InspectableWebContentsViewViews() {
 
 views::View* InspectableWebContentsViewViews::GetView() {
   return this;
-}
-
-views::View* InspectableWebContentsViewViews::GetWebView() {
-  return contents_web_view_;
 }
 
 void InspectableWebContentsViewViews::ShowDevTools(bool activate) {
